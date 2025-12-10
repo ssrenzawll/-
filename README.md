@@ -1,0 +1,198 @@
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+export default function StarCatcherGame() {
+  const GROUND_Y = 78; // ตำแหน่งพื้น (เปอร์เซ็นต์จากบน)
+
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [starPos, setStarPos] = useState({ x: 50, y: 20 });
+  const [kidPos, setKidPos] = useState({ x: 50, y: GROUND_Y });
+  const [playing, setPlaying] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [sparkle, setSparkle] = useState(false);
+  const audioRef = useRef(null);
+
+  // นาฬิกานับถอยหลัง
+  useEffect(() => {
+    if (!playing) return;
+    if (timeLeft <= 0) return;
+
+    const timer = setInterval(() => setTimeLeft((t) => t - 1), 1000);
+    return () => clearInterval(timer);
+  }, [playing, timeLeft]);
+
+  // เมื่อตัวแปร timeLeft ถึง 0 ให้เปลี่ยนสถานะเป็น gameOver
+  useEffect(() => {
+    if (timeLeft === 0 && playing) {
+      setPlaying(false);
+      setGameOver(true);
+    }
+  }, [timeLeft, playing]);
+
+  // ให้แน่ใจว่าเพลงจะเล่นเมื่อผู้เล่นกดเริ่ม (autoplay policy)
+  useEffect(() => {
+    if (audioRef.current) {
+      // pause by default — will be played when startGame() ถูกเรียก
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  }, []);
+
+  const moveStar = () => {
+    const x = Math.random() * 85 + 5;
+    const y = Math.random() * 50 + 5;
+    setStarPos({ x, y });
+  };
+
+  const catchStar = () => {
+    // เด็กกระโดดไปตำแหน่งดาว (ใช้ top/left ของเด็กเป็นตำแหน่งดาว)
+    setKidPos({ x: starPos.x, y: starPos.y });
+
+    setTimeout(() => {
+      setScore((s) => s + 1);
+      setSparkle(true);
+      moveStar();
+      // เด็กกลับไปยืนที่กลางด้านล่างกรอบ
+      setKidPos({ x: 50, y: GROUND_Y });
+      setTimeout(() => setSparkle(false), 400);
+    }, 350);
+  };
+
+  const startGame = () => {
+    setScore(0);
+    setTimeLeft(30);
+    setPlaying(true);
+    setGameStarted(true);
+    setGameOver(false);
+    moveStar();
+    setKidPos({ x: 50, y: GROUND_Y });
+
+    // เริ่มเพลงหลังผู้เล่นกดปุ่ม (เพื่อข้าม autoplay policy)
+    if (audioRef.current) {
+      const p = audioRef.current.play();
+      if (p && p.catch) p.catch(() => {});
+    }
+  };
+
+  const restartGame = () => {
+    // เล่นใหม่จากหน้า End Screen
+    setScore(0);
+    setTimeLeft(30);
+    setPlaying(true);
+    setGameStarted(true);
+    setGameOver(false);
+    moveStar();
+    setKidPos({ x: 50, y: GROUND_Y });
+
+    if (audioRef.current) {
+      const p = audioRef.current.play();
+      if (p && p.catch) p.catch(() => {});
+    }
+  };
+
+  const goToStartScreen = () => {
+    // กลับสู่หน้าเริ่ม (ไม่เล่นเพลง)
+    setPlaying(false);
+    setGameStarted(false);
+    setGameOver(false);
+    setTimeLeft(30);
+    setScore(0);
+    if (audioRef.current) audioRef.current.pause();
+  };
+
+  // หน้าเริ่มเกม
+  if (!gameStarted && !gameOver) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+        <motion.h1 className="text-4xl font-extrabold mb-8 text-black">⭐ เกมเด็กจับดาว ⭐</motion.h1>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={startGame}
+          className="px-8 py-4 bg-yellow-400 text-purple-900 font-bold rounded-full shadow-lg"
+        >เริ่มเล่นเกม</motion.button>
+      </div>
+    );
+  }
+
+  // หน้าเกม (ระหว่างเล่น)
+  if (gameStarted && !gameOver) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white relative">
+        <audio ref={audioRef} loop src="/petal_rain.mp3" />
+
+        <motion.h1 className="text-4xl font-extrabold mb-4 text-black drop-shadow">⭐ เกมเด็กจับดาว ⭐</motion.h1>
+
+        <div className="relative w-80 h-96 border-4 border-black rounded-2xl overflow-hidden bg-gray-100">
+          {playing && timeLeft > 0 && (
+            <div
+              onClick={catchStar}
+              className="absolute text-3xl cursor-pointer select-none hover:scale-125 transition"
+              style={{ left: `${starPos.x}%`, top: `${starPos.y}%` }}
+            >⭐</div>
+          )}
+
+          <AnimatePresence>
+            {sparkle && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1.6 }}
+                exit={{ opacity: 0 }}
+                className="absolute text-4xl"
+                style={{ left: `${starPos.x}%`, top: `${starPos.y}%` }}
+              >✨</motion.div>
+            )}
+          </AnimatePresence>
+
+          {playing && (
+            <motion.div
+              animate={{ left: `${kidPos.x}%`, top: `${kidPos.y}%` }}
+              transition={{ duration: 0.45 }}
+              className="absolute text-4xl drop-shadow"
+            >🧒</motion.div>
+          )}
+
+          {/* พื้นฐาน: สามารถเพิ่มพื้น/กรอบภายในนี้ได้ */}
+        </div>
+
+        {playing && (
+          <div className="mt-4 flex gap-8 text-lg font-semibold border-2 border-black rounded-xl px-4 py-2 bg-gray-200">
+            <p>⏱ {timeLeft} วินาที</p>
+            <p>🎯 {score} คะแนน</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // หน้า End Screen (แยกจากหน้าเล่นเกม)
+  if (gameOver) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+        <div className="w-full max-w-md p-6 rounded-2xl shadow-lg text-center">
+          <h1 className="text-3xl font-bold mb-6">จบแล้ว!</h1>
+          <p className="text-2xl mb-8">คะแนนของคุณ: {score}</p>
+          <div className="flex flex-col gap-4">
+            <button
+              onClick={restartGame}
+              className="px-6 py-3 bg-blue-500 text-white rounded-xl text-lg"
+            >
+              เล่นอีกครั้ง
+            </button>
+            <button
+              onClick={goToStartScreen}
+              className="px-6 py-3 bg-gray-300 text-black rounded-xl text-lg"
+            >
+              กลับสู่หน้าเริ่ม
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ค่า fallback (ควรจะไม่ถึงจุดนี้)
+  return null;
+}
